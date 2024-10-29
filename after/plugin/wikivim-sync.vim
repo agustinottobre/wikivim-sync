@@ -36,7 +36,7 @@ augroup wiki_sync
 
   " Function to execute Git commands asynchronously
   function! s:git_action(action, callback)
-    let command = ':silent !' . a:action
+    let command = ':silent !' . a:action . ' 2>&1'  " Capture both stdout and stderr
     if has("nvim")
       call jobstart(command, {'on_exit': a:callback})
     else
@@ -46,9 +46,11 @@ augroup wiki_sync
   endfunction
 
   " Callback for when the Git job exits
-  function! My_exit_cb(channel, msg)
+  function! My_exit_cb(job_id, data, event)
     echom "[wiki sync] Sync done"
     execute 'checktime'
+    " Optionally, you can print the output from the job
+    echom join(data, "\n")
   endfunction
 
   " Pull changes from the Git repository
