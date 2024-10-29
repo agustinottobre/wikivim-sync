@@ -6,6 +6,10 @@ augroup wiki_sync
     let g:zettel_synced = 0
   endif
 
+  if !exists('g:sync_in_progress')
+    let g:sync_in_progress = 0
+  endif
+
   " Set the wiki root directory
   if !exists('g:wiki_root')
     let g:wiki_root = expand('~/wiki')  " Ensure the path is expanded
@@ -43,15 +47,15 @@ augroup wiki_sync
   " Callback for when the Git job exits
   function! My_exit_cb(channel, msg)
     echom "[wiki sync] Sync done"
-    let g:zettel_synced = 0  " Reset the sync flag
+    let g:sync_in_progress = 0  " Reset the sync flag
     execute 'checktime'
   endfunction
 
   " Pull changes from the Git repository
   function! s:pull_changes()
-    if g:zettel_synced == 0
+    if g:sync_in_progress == 0
       echom "[wiki sync] pulling changes"
-      let g:zettel_synced = 1
+      let g:sync_in_progress = 1
 
       let gitCommand = "git -C " . g:wiki_root . " pull --rebase origin " . g:wiki_sync_branch
       call s:git_action(gitCommand)
@@ -61,14 +65,18 @@ augroup wiki_sync
         call s:git_action("task sync")
       endif
     else
-      echom "[wiki sync] Already syncing."
+      echom "[wiki sync] Sync in progress, please wait."
     endif
   endfunction
 
   " Push changes to the Git repository
   function! s:push_changes()
-    let gitCommand = "git -C " . g:wiki_root . " push origin " . g:wiki_sync_branch
-    call s:git_action(gitCommand)
+    if g:sync_in_progress == 0
+      let gitCommand = "git -C " . g:wiki_root . " push origin " . g:wiki_sync_branch
+      call s:git_action(gitCommand)
+    else
+      echom "[wiki sync] Sync in progress, please wait."
+    endif
   endfunction
 
   " Auto-sync changes at the start
