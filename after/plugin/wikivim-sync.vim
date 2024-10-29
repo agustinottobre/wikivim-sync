@@ -6,9 +6,6 @@ augroup wiki_sync
     let g:zettel_synced = 0
   endif
 
-  " Initialize output variable
-  let g:git_output = ""
-
   " Set the wiki root directory
   if !exists('g:wiki_root')
     let g:wiki_root = expand('~/wiki')  " Ensure the path is expanded
@@ -38,37 +35,15 @@ augroup wiki_sync
   endif
 
   " Function to execute Git commands asynchronously
-  function! s:git_action(action, callback)
-    let command = a:action
-    if has("nvim")
-      call jobstart(command, {
-          \ 'on_exit': a:callback,
-          \ 'on_stdout': { job_id, data -> call s:handle_output(data) },
-          \ 'on_stderr': { job_id, data -> call s:handle_output(data) },
-          \ })
-    else
-      call job_start(command, {'exit_cb': a:callback})
-    endif
-    redraw!
-  endfunction
-
-  " Handle output from the Git command
-  function! s:handle_output(data)
-    " Store or process the output as needed
-    let g:git_output .= join(data, "\n") . "\n"
+  function! s:git_action(action)
+    let command = ':AsyncRun ' . a:action
+    execute command
   endfunction
 
   " Callback for when the Git job exits
-  function! My_exit_cb(job_id, exit_code)
+  function! My_exit_cb(channel, msg)
     echom "[wiki sync] Sync done"
     execute 'checktime'
-    " Print the output from the job
-    if exists('g:git_output') && !empty(g:git_output)
-      echom g:git_output
-      let g:git_output = ""  " Clear the output after displaying
-    else
-      echom "No output from the job."
-    endif
   endfunction
 
   " Pull changes from the Git repository
@@ -78,11 +53,11 @@ augroup wiki_sync
       let g:zettel_synced = 1
 
       let gitCommand = "git -C " . g:wiki_root . " pull --rebase origin " . g:wiki_sync_branch
-      call s:git_action(gitCommand, 'My_exit_cb')
+      call s:git_action(gitCommand)
 
       " Sync Taskwarrior if enabled
       if g:sync_taskwarrior == 1
-        call s:git_action("task sync", 'My_exit_cb')
+        call s:git_action("task sync")
       endif
     else
       echom "[wiki sync] Already synced."
@@ -92,7 +67,7 @@ augroup wiki_sync
   " Push changes to the Git repository
   function! s:push_changes()
     let gitCommand = "git -C " . g:wiki_root . " push origin " . g:wiki_sync_branch
-    call s:git_action(gitCommand, 'My_exit_cb')
+    call s:git_action(gitCommand)
   endfunction
 
   " Auto-sync changes at the start
@@ -101,10 +76,11 @@ augroup wiki_sync
   au! BufEnter * call <sid>pull_changes()
 
   " Auto-commit changes on each file write
-  au! BufWritePost * call s:git_action("git -C " . g:wiki_root . " add . ; git -C " . g:wiki_root . " commit -m \"" . strftime(g:wiki_sync_commit_message) . "\"", 'My_exit_cb')
+  au! BufWritePost * call <sid>git_action("git -C " . g:wiki_root . " add . ; git -C " . g:wiki_root . " commit -m \"" . strftime(g:wiki_sync_commit_message) . "\"")
 
   " Push changes on Vim leave
-  au! VimLeave * call s:git_action("[ $(git -C " . g:wiki_root . " rev-list @{u}..@ --count) = 0 ] && : || git -C " . g:wiki_root . " push origin " . g:wiki_sync_branch, 'My_exit_cb')
+  au! VimLeave * call <sid>push_changes()
 
   " Optional: Fetch changes on focus lost
-  au! FocusLost * call s:git_action("git -C " . g:
+  au! FocusLost * call s:git_action("git -C " . g:wiki_root . " fetch")
+augroup END
