@@ -43,6 +43,7 @@ augroup wiki_sync
   " Callback for when the Git job exits
   function! My_exit_cb(channel, msg)
     echom "[wiki sync] Sync done"
+    let g:zettel_synced = 0  " Reset the sync flag
     execute 'checktime'
   endfunction
 
@@ -60,7 +61,7 @@ augroup wiki_sync
         call s:git_action("task sync")
       endif
     else
-      echom "[wiki sync] Already synced."
+      echom "[wiki sync] Already syncing."
     endif
   endfunction
 
