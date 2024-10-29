@@ -6,6 +6,9 @@ augroup wiki_sync
     let g:zettel_synced = 0
   endif
 
+  " Initialize output variable
+  let g:git_output = ""
+
   " Set the wiki root directory
   if !exists('g:wiki_root')
     let g:wiki_root = expand('~/wiki')  " Ensure the path is expanded
@@ -36,22 +39,33 @@ augroup wiki_sync
 
   " Function to execute Git commands asynchronously
   function! s:git_action(action, callback)
-    let command = ':silent !' . a:action . ' 2>&1'  " Capture both stdout and stderr
+    let command = a:action
     if has("nvim")
-      call jobstart(command, {'on_exit': a:callback})
+      call jobstart(command, {
+          \ 'on_exit': a:callback,
+          \ 'on_stdout': { job_id, data -> call s:handle_output(data) },
+          \ 'on_stderr': { job_id, data -> call s:handle_output(data) },
+          \ })
     else
       call job_start(command, {'exit_cb': a:callback})
     endif
     redraw!
   endfunction
 
+  " Handle output from the Git command
+  function! s:handle_output(data)
+    " Store or process the output as needed
+    let g:git_output .= join(data, "\n") . "\n"
+  endfunction
+
   " Callback for when the Git job exits
-  function! My_exit_cb(job_id, exit_code, data)
+  function! My_exit_cb(job_id, exit_code)
     echom "[wiki sync] Sync done"
     execute 'checktime'
     " Print the output from the job
-    if !empty(data)
-      echom join(data, "\n")
+    if exists('g:git_output') && !empty(g:git_output)
+      echom g:git_output
+      let g:git_output = ""  " Clear the output after displaying
     else
       echom "No output from the job."
     endif
@@ -93,5 +107,4 @@ augroup wiki_sync
   au! VimLeave * call s:git_action("[ $(git -C " . g:wiki_root . " rev-list @{u}..@ --count) = 0 ] && : || git -C " . g:wiki_root . " push origin " . g:wiki_sync_branch, 'My_exit_cb')
 
   " Optional: Fetch changes on focus lost
-  au! FocusLost * call s:git_action("git -C " . g:wiki_root . " fetch", 'My_exit_cb')
-augroup END
+  au! FocusLost * call s:git_action("git -C " . g:
