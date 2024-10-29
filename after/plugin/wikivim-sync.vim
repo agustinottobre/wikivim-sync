@@ -50,7 +50,11 @@ augroup wiki_sync
     echom "[wiki sync] Sync done"
     execute 'checktime'
     " Optionally, you can print the output from the job
-    echom join(data, "\n")
+    if !empty(data)
+      echom join(data, "\n")
+    else
+      echom "No output from the job."
+    endif
   endfunction
 
   " Pull changes from the Git repository
