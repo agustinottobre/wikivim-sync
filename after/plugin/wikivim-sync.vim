@@ -82,7 +82,9 @@ augroup wiki_sync
 
   " Check if the current file is within the wiki directory
   function! s:is_in_wiki_directory()
-    return expand("%:p:h") =~# fnamemodify(g:wiki_root, ":p")
+    let current_dir = expand("%:p:h")
+    if current_dir[-1] != '/' | let current_dir .= '/' | endif
+    return current_dir =~# fnamemodify(g:wiki_root, ":p")
   endfunction
 
   " Auto-sync changes at the start
