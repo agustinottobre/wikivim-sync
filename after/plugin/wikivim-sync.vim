@@ -15,6 +15,10 @@ augroup wiki_sync
     let g:push_in_progress = 0
   endif
 
+  if !exists('g:commit_in_progress')
+    let g:commit_in_progress = 0
+  endif
+
   " Set the wiki root directory
   if !exists('g:wiki_root')
     let g:wiki_root = expand('~/wiki')  " Ensure the path is expanded
@@ -80,6 +84,22 @@ augroup wiki_sync
     endif
   endfunction
 
+    " Commit changes to the Git repository
+  function! s:commit_changes()
+    let commit_message = substitute(g:wiki_sync_commit_message, '%c', strftime('%c'), 'g')
+    call system("git -C " . g:wiki_root . " add . ; git -C " . g:wiki_root . " commit -m \"" . commit_message . "\"")
+  endfunction
+
+  " Commit changes to the Git repository
+  function! s:commit_changes()
+    if g:commit_in_progress == 0
+      let g:commit_in_progress = 1
+      let commit_message = substitute(g:wiki_sync_commit_message, '%c', strftime('%c'), 'g')
+      call system("git -C " . g:wiki_root . " add . ; git -C " . g:wiki_root . " commit -m \"" . commit_message . "\"")
+      let g:commit_in_progress = 0  " Clear the commit in progress flag
+    endif
+  endfunction
+
   " Check if the current file is within the wiki directory
   function! s:is_in_wiki_directory()
     let current_dir = expand("%:p:h")
@@ -93,10 +113,21 @@ augroup wiki_sync
   au! BufEnter * if s:is_in_wiki_directory() | call <sid>pull_changes() | endif
 
   " Auto-commit changes on each file write
-  au! BufWritePost * if s:is_in_wiki_directory() | call <sid>git_action("git -C " . g:wiki_root . " add . ; git -C " . g:wiki_root . " commit -m \"" . strftime(g:wiki_sync_commit_message) . "\"") | endif
+  au! BufWritePost * if s:is_in_wiki_directory() | call s:commit_changes() | endif
 
   " Push changes on Vim leave
-  au! VimLeave * if s:is_in_wiki_directory() | call <sid>push_changes() | endif
+  au! VimLeave *
+  if s:is_in_wiki_directory() | 
+    " Check if a commit is in progress before pushing
+    if g:commit_in_progress == 0
+      let count = system("git -C " . g:wiki_root . " rev-list @{u}..@ --count")
+      if count !=# '0' |
+        call s:push_changes() |
+      endif | 
+    else
+      echom "[wiki sync] Commit in progress, skipping push."
+    endif
+  endif
 
   " Optional: Fetch changes on focus lost
   au! FocusLost * if s:is_in_wiki_directory() | call <sid>git_action("git -C " . g:wiki_root . " fetch") | endif
