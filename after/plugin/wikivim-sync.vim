@@ -34,9 +34,14 @@ augroup wiki_sync
     let g:wiki_sync_commit_message = 'Auto commit + push. %c'
   endif
 
-  " Function to execute Git commands
-  function! s:git_action(action)
-    execute ':silent !' . a:action
+  " Function to execute Git commands asynchronously
+  function! s:git_action(action, callback)
+    let command = ':silent !' . a:action
+    if has("nvim")
+      call jobstart(command, {'on_exit': a:callback})
+    else
+      call job_start(command, {'exit_cb': a:callback})
+    endif
     redraw!
   endfunction
 
@@ -53,17 +58,11 @@ augroup wiki_sync
       let g:zettel_synced = 1
 
       let gitCommand = "git -C " . g:wiki_root . " pull --rebase origin " . g:wiki_sync_branch
-      let s:gitCallbacks = {"exit_cb": "My_exit_cb"}
-
-      if has("nvim")
-        call jobstart(gitCommand, s:gitCallbacks)
-      else
-        call job_start(gitCommand, s:gitCallbacks)
-      endif
+      call s:git_action(gitCommand, 'My_exit_cb')
 
       " Sync Taskwarrior if enabled
       if g:sync_taskwarrior == 1
-        call jobstart("task sync")
+        call s:git_action("task sync", 'My_exit_cb')
       endif
     else
       echom "[wiki sync] Already synced."
@@ -73,7 +72,7 @@ augroup wiki_sync
   " Push changes to the Git repository
   function! s:push_changes()
     let gitCommand = "git -C " . g:wiki_root . " push origin " . g:wiki_sync_branch
-    call jobstart(gitCommand)
+    call s:git_action(gitCommand, 'My_exit_cb')
   endfunction
 
   " Auto-sync changes at the start
@@ -82,12 +81,11 @@ augroup wiki_sync
   au! BufEnter * call <sid>pull_changes()
 
   " Auto-commit changes on each file write
-  au! BufWritePost * call <sid>git_action("git -C " . g:wiki_root . " add . ; git -C " . g:wiki_root . " commit -m \"" . strftime(g:wiki_sync_commit_message) . "\"")
+  au! BufWritePost * call s:git_action("git -C " . g:wiki_root . " add . ; git -C " . g:wiki_root . " commit -m \"" . strftime(g:wiki_sync_commit_message) . "\"", 'My_exit_cb')
 
   " Push changes on Vim leave
-  au! VimLeave * call <sid>git_action("[ $(git -C " . g:wiki_root . " rev-list @{u}..@ --count) = 0 ] && : || git -C " . g:wiki_root . " push origin " . g:wiki_sync_branch)
+  au! VimLeave * call s:git_action("[ $(git -C " . g:wiki_root . " rev-list @{u}..@ --count) = 0 ] && : || git -C " . g:wiki_root . " push origin " . g:wiki_sync_branch, 'My_exit_cb')
 
   " Optional: Fetch changes on focus lost
-  au! FocusLost * call <sid>git_action("git -C " . g:wiki_root . " fetch")
+  au! FocusLost * call s:git_action("git -C " . g:wiki_root . " fetch", 'My_exit_cb')
 augroup END
-
