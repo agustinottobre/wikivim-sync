@@ -46,10 +46,10 @@ augroup wiki_sync
   endfunction
 
   " Callback for when the Git job exits
-  function! My_exit_cb(job_id, data, event)
+  function! My_exit_cb(job_id, exit_code, data)
     echom "[wiki sync] Sync done"
     execute 'checktime'
-    " Optionally, you can print the output from the job
+    " Print the output from the job
     if !empty(data)
       echom join(data, "\n")
     else
